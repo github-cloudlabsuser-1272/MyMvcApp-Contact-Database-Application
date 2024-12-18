@@ -1,0 +1,64 @@
+name: Build and deploy ASP app to Azure Web App - myMvcAppServiceNew
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSBuild path
+        uses: microsoft/setup-msbuild@v1.0.2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v1.0.5
+
+      - name: Restore NuGet packages
+        run: nuget restore
+
+      - name: Build and Publish
+        run: |
+          msbuild /p:Configuration=Release /p:OutputPath=D:\a\MyMvcApp-Contact-Database-Application\MyMvcApp-Contact-Database-Application\bin\Release\net8.0\MyMvcApp
+          dotnet publish -c Release -o D:\a\MyMvcApp-Contact-Database-Application\MyMvcApp-Contact-Database-Application\bin\Release\net8.0\MyMvcApp
+
+      - name: Upload artifact for deployment job
+        uses: actions/upload-artifact@v4
+        with:
+          name: ASP-app
+          path: 'D:\a\MyMvcApp-Contact-Database-Application\MyMvcApp-Contact-Database-Application\bin\Release\net8.0\MyMvcApp/**'
+
+  deploy:
+    runs-on: windows-latest
+    needs: build
+    environment:
+      name: 'Production'
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: ASP-app
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_409FD776D56D4F0F85FAD6DF0605E837 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A474EBE555E14A3782186BFB04C2EE3F }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_1B26E055E5C546C6B632A81C4879DB4E }}
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'myMvcAppServiceNew'
+          slot-name: 'Production'
+          package: .
